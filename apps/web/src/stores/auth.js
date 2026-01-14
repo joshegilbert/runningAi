@@ -6,9 +6,9 @@ export const useAuthStore = defineStore("auth", () => {
   const token = ref(localStorage.getItem("token") || "");
   const user = ref(null);
 
-  const isAuthenticated = compute(() => !!token.value);
+  const isAuthenticated = computed(() => !!token.value);
 
-  const api = creeateApiClient(() => token.value);
+  const api = createApiClient(() => token.value);
 
   function setToken(newToken) {
     token.value = newToken || "";
