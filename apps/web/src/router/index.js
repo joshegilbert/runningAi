@@ -16,14 +16,24 @@ const router = createRouter({
   ],
 });
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore();
 
-  if (to.meta.requiresAuth && !auth.isLoggedIn) {
+  if (auth.token && !auth.user) {
+    try {
+      await auth.fetchMe();
+    } catch {
+      // fetchMe already clears token/user if invalid
+    }
+  }
+
+  const loggedIn = !!auth.token;
+
+  if (to.meta.requiresAuth && !loggedIn) {
     return "/login";
   }
 
-  if (to.path === "/login" && auth.isLoggedIn) {
+  if (to.path == "/login" && loggedIn) {
     return "/dashboard";
   }
 });
