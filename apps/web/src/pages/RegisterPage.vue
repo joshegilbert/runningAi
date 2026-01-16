@@ -3,21 +3,22 @@ import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 
-const email = ref("");
-const password = ref("");
-const error = ref("");
-const loading = ref(false);
 const router = useRouter();
 const auth = useAuthStore();
+const email = ref("");
+const password = ref("");
+const name = ref("");
+const error = ref("");
+const loading = ref(false);
 
-async function handleLogin() {
+async function handleRegister() {
   error.value = "";
   loading.value = true;
   try {
-    await auth.login(email.value, password.value);
+    await auth.register(name.value, email.value, password.value);
     router.push("/dashboard");
   } catch (err) {
-    error.value = err?.message || "Login failed";
+    error.value = err?.message || "Registration failed";
   } finally {
     loading.value = false;
   }
@@ -26,9 +27,14 @@ async function handleLogin() {
 
 <template>
   <div style="max-width: 400px; margin: 2rem auto">
-    <h1>Login</h1>
-    <form @submit.prevent="handleLogin">
+    <h1>Registration</h1>
+    <form @submit.prevent="handleRegister">
       <div>
+        <label>Name (optional)</label>
+        <br />
+        <input v-model="name" />
+      </div>
+      <div style="margin-top: 1rem">
         <label>Email</label>
         <br />
         <input type="email" v-model="email" required />
@@ -42,11 +48,11 @@ async function handleLogin() {
         {{ error }}
       </p>
       <button type="submit" :disabled="loading" style="margin-top: 1rem">
-        {{ loading ? "Logging in..." : "Login" }}
+        {{ loading ? "Creating account..." : "Create account" }}
       </button>
       <p style="margin-top: 1rem; text-align: center">
-        Don't have an account?
-        <router-link to="/register">Register</router-link>
+        Already have and account?
+        <router-link to="/Login">Login</router-link>
       </p>
     </form>
   </div>
