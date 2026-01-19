@@ -1,17 +1,31 @@
 import { createRouter, createWebHistory } from "vue-router";
+import { useAuthStore } from "../stores/auth";
 import LoginPage from "../pages/LoginPage.vue";
 import DashboardPage from "../pages/DashboardPage.vue";
-import { useAuthStore } from "../stores/auth";
+import RegisterPage from "../pages/RegisterPage.vue";
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: "/", redirect: "/dashboard" },
-    { path: "/login", component: LoginPage },
+    {
+      path: "/login",
+      component: LoginPage,
+      meta: {
+        requiresGuest: true,
+      },
+    },
     {
       path: "/dashboard",
       component: DashboardPage,
       meta: { requiresAuth: true },
+    },
+    {
+      path: "/register",
+      component: RegisterPage,
+      meta: {
+        requiresGuest: true,
+      },
     },
   ],
 });
@@ -34,6 +48,10 @@ router.beforeEach(async (to) => {
   }
 
   if (to.path == "/login" && loggedIn) {
+    return "/dashboard";
+  }
+
+  if (to.meta.requiresGuest && loggedIn) {
     return "/dashboard";
   }
 });
