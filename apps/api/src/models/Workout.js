@@ -1,4 +1,5 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
+
 const workoutSchema = new mongoose.Schema(
   {
     user: {
@@ -7,26 +8,31 @@ const workoutSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+
     date: {
       type: Date,
       required: true,
     },
+
     type: {
       type: String,
       required: true,
       enum: ["easy", "workout", "long", "race"],
       default: "easy",
     },
+
     distanceMeters: {
       type: Number,
       required: true,
       min: 0,
     },
+
     durationSeconds: {
       type: Number,
       required: true,
       min: 0,
     },
+
     notes: {
       type: String,
       default: "",
@@ -39,4 +45,4 @@ const workoutSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model("Workout", workoutSchema);
+export default mongoose.model("Workout", workoutSchema);
