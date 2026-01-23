@@ -1,4 +1,6 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const API_PREFIX = "/api";
+
 
 async function buildError(res) {
   let message = `Request failed (${res.status})`;
@@ -20,10 +22,18 @@ function makeUrl(path) {
   if (!BASE_URL) {
     throw new Error("Missing VITE_API_BASE_URL in your frontend .env file");
   }
+
   const cleanBase = BASE_URL.replace(/\/+$/, "");
+
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  return `${cleanBase}${cleanPath}`;
+
+  if (cleanPath.startsWith(API_PREFIX + "/")) {
+    return `${cleanBase}${cleanPath}`;
+  }
+
+  return `${cleanBase}${API_PREFIX}${cleanPath}`;
 }
+
 
 export function createApiClient(tokenGetter = () => null) {
   async function request(path, { method = "GET", body } = {}) {
