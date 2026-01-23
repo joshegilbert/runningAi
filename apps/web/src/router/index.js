@@ -3,6 +3,8 @@ import { useAuthStore } from "../stores/auth";
 import LoginPage from "../pages/LoginPage.vue";
 import DashboardPage from "../pages/DashboardPage.vue";
 import RegisterPage from "../pages/RegisterPage.vue";
+import LogWorkoutPage from "../pages/LogWorkoutPage.vue";
+
 
 const router = createRouter({
   history: createWebHistory(),
@@ -19,6 +21,12 @@ const router = createRouter({
       path: "/dashboard",
       component: DashboardPage,
       meta: { requiresAuth: true },
+    },
+    {
+      path: "/workouts/new",
+      name: "workouts-new",
+      component: LogWorkoutPage,
+      meta: { requiresAuth: true }
     },
     {
       path: "/register",
