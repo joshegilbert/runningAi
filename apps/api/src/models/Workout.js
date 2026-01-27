@@ -39,10 +39,24 @@ const workoutSchema = new mongoose.Schema(
       trim: true,
       maxlength: 2000,
     },
+
+    source: {
+      provider: {
+        type: String,
+        enum: ["manual", "strava"],
+        default: "manual",
+      },
+      activityId: { type: String, index: true },
+    },
   },
   {
     timestamps: true,
-  }
+  },
+);
+
+workoutSchema.index(
+  { user: 1, "source.provider": 1, "source.activityId": 1 },
+  { unique: true, sparse: true },
 );
 
 export default mongoose.model("Workout", workoutSchema);
