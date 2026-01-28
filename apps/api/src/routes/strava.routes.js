@@ -114,6 +114,71 @@ router.post("/activities/:id/import", auth, async (req, res) => {
   }
 });
 
+router.post("/sync", auth, async (req, res) => {
+  try {
+    const accessToken = await getValidAccessToken(req.userId);
+
+    const stravaRes = await fetch(
+      "https://www.strava.com/api/v3/athlete/activities?per_page=50",
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+
+    if (!stravaRes.ok) {
+      const text = await stravaRes.text();
+      throw new Error(text);
+    }
+
+    const activities = await stravaRes.json();
+
+    let created = 0;
+    let updated = 0;
+
+    for (const a of activities) {
+      if (a.type !== "Run") continue;
+
+      const workoutDoc = {
+        user: req.userId,
+        date: a.start_date,
+        type: "easy",
+        distanceMeters: a.distance ?? 0,
+        durationSeconds: a.moving_time ?? a.elapsed_time ?? 0,
+        notes: a.name || "",
+        source: {
+          provider: "strava",
+          activityId: String(a.id),
+        },
+      };
+
+      const result = await Workout.findOneAndUpdate(
+        {
+          user: req.userId,
+          "source.provider": "strava",
+          "source.activityId": String(a.id),
+        },
+        { $set: workoutDoc },
+        { upsert: true, new: true },
+      );
+
+      if (result.createdAt.getTime() === result.updatedAt.getTime()) {
+        created++;
+      } else {
+        updated++;
+      }
+    }
+
+    res.json({ message: "Strava sync complete", created, updated });
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+      name: err.name,
+      code: err.code,
+      keyValue: err.keyValue,
+    });
+  }
+});
+
 router.get("/connect", auth, (req, res) => {
   const clientId = process.env.STRAVA_CLIENT_ID;
   const redirectURI = process.env.STRAVA_REDIRECT_URI;
