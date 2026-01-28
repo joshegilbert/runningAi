@@ -21,16 +21,11 @@ const workoutSchema = new mongoose.Schema(
       default: "easy",
     },
 
-    distanceMeters: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-
-    durationSeconds: {
-      type: Number,
-      required: true,
-      min: 0,
+    title: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: 200,
     },
 
     notes: {
@@ -40,6 +35,30 @@ const workoutSchema = new mongoose.Schema(
       maxlength: 2000,
     },
 
+    // Core metrics
+    distanceMeters: { type: Number, required: true, min: 0 },
+    durationSeconds: { type: Number, required: true, min: 0 },
+
+    //(nullable)
+    avgSpeedMps: { type: Number, default: null, min: 0 },
+    elevationGainM: { type: Number, default: null, min: 0 },
+
+    avgHeartRateBpm: { type: Number, default: null, min: 0 },
+    maxHeartRateBpm: { type: Number, default: null, min: 0 },
+
+    sufferScore: { type: Number, default: null, min: 0 },
+    perceivedEffort: { type: Number, default: null, min: 1, max: 10 },
+
+    sportType: {
+      type: String,
+      default: "Run",
+      trim: true,
+      maxlength: 30,
+    },
+
+    metricsVersion: { type: Number, default: 1 },
+    ingestedAt: { type: Date, default: Date.now },
+
     source: {
       provider: {
         type: String,
@@ -47,6 +66,10 @@ const workoutSchema = new mongoose.Schema(
         default: "manual",
       },
       activityId: { type: String, index: true },
+
+      startDateLocal: { type: Date, default: null },
+      timezone: { type: String, default: "" },
+      deviceName: { type: String, default: "" },
     },
   },
   {
@@ -54,6 +77,7 @@ const workoutSchema = new mongoose.Schema(
   },
 );
 
+// Idempotency key for Strava imports/sync
 workoutSchema.index(
   { user: 1, "source.provider": 1, "source.activityId": 1 },
   { unique: true, sparse: true },
