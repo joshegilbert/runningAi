@@ -2,6 +2,7 @@ import { Router } from "express";
 import auth from "../middleware/auth.js";
 import StravaConnection from "../models/StravaConnection.js";
 import Workout from "../models/Workout.js";
+import RawStravaActivity from "../models/RawStravaActivity.js";
 
 const router = Router();
 
@@ -40,40 +41,47 @@ async function getValidAccessToken(userId) {
   conn.accessToken = data.access_token;
   conn.refreshToken = data.refresh_token;
   conn.expiresAt = data.expires_at;
-
-  // Strava refresh responses may not always include scope
   conn.scope = data.scope ?? conn.scope ?? "";
-
   await conn.save();
+
   return conn.accessToken;
 }
 
 /**
- * Helper: Convert a Strava activity into our Workout doc shape
+ * Map a Strava activity summary/detail payload into YOUR Workout schema shape.
+ * Keeps HR fields nullable when not present.
  */
-function toWorkoutDoc(userId, a) {
+function mapStravaToWorkout({ userId, a }) {
+  const hasHR = Boolean(a.has_heartrate);
+
   return {
     user: userId,
 
-    date: a.start_date, // UTC
+    date: a.start_date ? new Date(a.start_date) : new Date(),
+
+    // Keep simple for now. Later you'll classify using pace/HR/suffer/etc.
+    type: "easy",
+
     title: a.name || "",
-    notes: "", // keep notes for user-entered notes later
+    notes: "",
 
-    sportType: a.sport_type || a.type || "Run",
-
-    // Coach labeling (simple MVP default)
-    type: a.type === "Run" ? "easy" : "workout",
-
+    // Core
     distanceMeters: a.distance ?? 0,
     durationSeconds: a.moving_time ?? a.elapsed_time ?? 0,
 
+    // Extras (nullable)
     avgSpeedMps: a.average_speed ?? null,
     elevationGainM: a.total_elevation_gain ?? null,
 
-    avgHeartRateBpm: a.has_heartrate ? (a.average_heartrate ?? null) : null,
-    maxHeartRateBpm: a.has_heartrate ? (a.max_heartrate ?? null) : null,
+    avgHeartRateBpm: hasHR ? (a.average_heartrate ?? null) : null,
+    maxHeartRateBpm: hasHR ? (a.max_heartrate ?? null) : null,
 
     sufferScore: a.suffer_score ?? null,
+
+    sportType: a.sport_type || a.type || "Run",
+
+    metricsVersion: 1,
+    ingestedAt: new Date(),
 
     source: {
       provider: "strava",
@@ -87,8 +95,29 @@ function toWorkoutDoc(userId, a) {
 }
 
 /**
+ * GET /api/strava/status
+ * For UI: show if Strava is connected and last sync time.
+ */
+router.get("/status", auth, async (req, res) => {
+  try {
+    const conn = await StravaConnection.findOne({ user: req.userId }).lean();
+    if (!conn) return res.json({ connected: false });
+
+    res.json({
+      connected: true,
+      athleteId: conn.athleteId,
+      scope: conn.scope || "",
+      connectedAt: conn.connectedAt || null,
+      lastSyncAt: conn.lastSyncAt || null,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/**
  * GET /api/strava/activities
- * Fetch recent Strava activities (read-only)
+ * Read-only preview of recent activities
  */
 router.get("/activities", auth, async (req, res) => {
   try {
@@ -114,102 +143,119 @@ router.get("/activities", auth, async (req, res) => {
 });
 
 /**
- * POST /api/strava/activities/:id/import
- * Import a single Strava activity
- */
-router.post("/activities/:id/import", auth, async (req, res) => {
-  try {
-    const accessToken = await getValidAccessToken(req.userId);
-    const activityId = req.params.id;
-
-    const stravaRes = await fetch(
-      `https://www.strava.com/api/v3/activities/${activityId}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-
-    if (!stravaRes.ok) {
-      const text = await stravaRes.text();
-      return res
-        .status(400)
-        .json({ message: "Failed to fetch activity details", details: text });
-    }
-
-    const a = await stravaRes.json();
-    const workoutDoc = toWorkoutDoc(req.userId, a);
-
-    const filter = {
-      user: req.userId,
-      "source.provider": "strava",
-      "source.activityId": String(a.id),
-    };
-
-    const workout = await Workout.findOneAndUpdate(
-      filter,
-      { $set: workoutDoc },
-      { upsert: true, new: true },
-    );
-
-    res.status(201).json({ workout });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-/**
  * POST /api/strava/sync
- * Bulk sync recent Strava runs
+ * Incremental sync:
+ * - default: fetch after lastSyncAt (if exists)
+ * - ?full=true => ignore lastSyncAt and pull older history (paged)
  */
 router.post("/sync", auth, async (req, res) => {
   try {
     const accessToken = await getValidAccessToken(req.userId);
 
-    const stravaRes = await fetch(
-      "https://www.strava.com/api/v3/athlete/activities?per_page=50",
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
+    const conn = await StravaConnection.findOne({ user: req.userId });
+    if (!conn) throw new Error("Strava not connected");
 
-    if (!stravaRes.ok) {
-      const text = await stravaRes.text();
-      throw new Error(text);
-    }
+    const full = String(req.query.full || "").toLowerCase() === "true";
 
-    const activities = await stravaRes.json();
+    const after =
+      !full && conn.lastSyncAt
+        ? Math.floor(new Date(conn.lastSyncAt).getTime() / 1000)
+        : null;
+
+    const perPage = 200;
+    let page = 1;
 
     let created = 0;
     let updated = 0;
+    let processed = 0;
+    let rawUpserts = 0;
 
-    for (const a of activities) {
-      if (a.type !== "Run") continue;
+    while (true) {
+      const url = new URL("https://www.strava.com/api/v3/athlete/activities");
+      url.searchParams.set("per_page", String(perPage));
+      url.searchParams.set("page", String(page));
+      if (after) url.searchParams.set("after", String(after));
 
-      const workoutDoc = toWorkoutDoc(req.userId, a);
+      const stravaRes = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
 
-      const filter = {
-        user: req.userId,
-        "source.provider": "strava",
-        "source.activityId": String(a.id),
-      };
+      if (!stravaRes.ok) {
+        const text = await stravaRes.text();
+        throw new Error(text);
+      }
 
-      const result = await Workout.findOneAndUpdate(
-        filter,
-        { $set: workoutDoc },
-        { upsert: true, new: true, rawResult: true },
-      );
+      const activities = await stravaRes.json();
+      if (!Array.isArray(activities) || activities.length === 0) break;
 
-      if (result.lastErrorObject?.updatedExisting) updated++;
-      else created++;
+      for (const a of activities) {
+        const isRun = (a.sport_type || a.type) === "Run";
+        if (!isRun) continue;
+
+        // 1) Save raw payload (even if summary)
+        const rawResult = await RawStravaActivity.findOneAndUpdate(
+          {
+            user: req.userId,
+            provider: "strava",
+            activityId: String(a.id),
+          },
+          {
+            $setOnInsert: {
+              payload: a,
+              payloadVersion: 1,
+              fetchedAt: new Date(),
+            },
+          },
+          { upsert: true, rawResult: true },
+        );
+
+        if (!rawResult.lastErrorObject?.updatedExisting) {
+          rawUpserts++;
+        }
+
+        // 2) Save curated metrics
+        const workoutDoc = mapStravaToWorkout({ userId: req.userId, a });
+
+        const filter = {
+          user: req.userId,
+          "source.provider": "strava",
+          "source.activityId": String(a.id),
+        };
+
+        const result = await Workout.findOneAndUpdate(
+          filter,
+          { $set: workoutDoc },
+          { upsert: true, new: true, rawResult: true },
+        );
+
+        if (result.lastErrorObject?.updatedExisting) updated++;
+        else created++;
+
+        processed++;
+      }
+
+      if (activities.length < perPage) break;
+      page++;
     }
 
-    // Mark last successful sync
-    await StravaConnection.updateOne(
-      { user: req.userId },
-      { $set: { lastSyncAt: new Date() } },
-    );
+    conn.lastSyncAt = new Date();
+    await conn.save();
 
-    res.json({ message: "Strava sync complete", created, updated });
+    res.json({
+      message: "Strava sync complete",
+      created,
+      updated,
+      processed,
+      rawUpserts,
+      lastSyncAt: conn.lastSyncAt,
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
+
+// NOTE: athlete/activities returns SUMMARY payloads.
+// Full detail (laps, splits, zones) can be fetched later per activity.
 
 /**
  * GET /api/strava/connect

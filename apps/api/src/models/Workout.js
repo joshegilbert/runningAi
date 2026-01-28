@@ -35,16 +35,23 @@ const workoutSchema = new mongoose.Schema(
       maxlength: 2000,
     },
 
-    // Core metrics
+    // Core metrics (always present for a workout)
     distanceMeters: { type: Number, required: true, min: 0 },
     durationSeconds: { type: Number, required: true, min: 0 },
 
-    //(nullable)
+    // Useful optional metrics (nullable for non-HR devices / missing data)
     avgSpeedMps: { type: Number, default: null, min: 0 },
-    elevationGainM: { type: Number, default: null, min: 0 },
+    maxSpeedMps: { type: Number, default: null, min: 0 },
 
+    elevationGainM: { type: Number, default: null, min: 0 },
+    elevHighM: { type: Number, default: null },
+    elevLowM: { type: Number, default: null },
+
+    hasHeartrate: { type: Boolean, default: false },
     avgHeartRateBpm: { type: Number, default: null, min: 0 },
     maxHeartRateBpm: { type: Number, default: null, min: 0 },
+
+    avgCadenceSpm: { type: Number, default: null, min: 0 },
 
     sufferScore: { type: Number, default: null, min: 0 },
     perceivedEffort: { type: Number, default: null, min: 1, max: 10 },
@@ -56,7 +63,14 @@ const workoutSchema = new mongoose.Schema(
       maxlength: 30,
     },
 
+    startDateLocal: { type: Date, default: null },
+    timezone: { type: String, default: "" },
+    utcOffsetSeconds: { type: Number, default: null },
+
+    deviceName: { type: String, default: "" },
+
     metricsVersion: { type: Number, default: 1 },
+
     ingestedAt: { type: Date, default: Date.now },
 
     source: {
@@ -66,10 +80,6 @@ const workoutSchema = new mongoose.Schema(
         default: "manual",
       },
       activityId: { type: String, index: true },
-
-      startDateLocal: { type: Date, default: null },
-      timezone: { type: String, default: "" },
-      deviceName: { type: String, default: "" },
     },
   },
   {
