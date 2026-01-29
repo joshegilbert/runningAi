@@ -1,6 +1,8 @@
 import { Router } from "express";
+import crypto from "crypto";
 import auth from "../middleware/auth.js";
 import StravaConnection from "../models/StravaConnection.js";
+import StravaOAuthState from "../models/StravaOAuthState.js";
 import Workout from "../models/Workout.js";
 import RawStravaActivity from "../models/RawStravaActivity.js";
 
@@ -254,24 +256,37 @@ router.post("/sync", auth, async (req, res) => {
  * GET /api/strava/connect
  * Returns Strava OAuth URL
  */
-router.get("/connect", auth, (req, res) => {
-  const clientId = process.env.STRAVA_CLIENT_ID;
-  const redirectURI = process.env.STRAVA_REDIRECT_URI;
+router.get("/connect", auth, async (req, res) => {
+  try {
+    const clientId = process.env.STRAVA_CLIENT_ID;
+    const redirectURI = process.env.STRAVA_REDIRECT_URI;
 
-  const scope = "read,activity:read_all";
-  const approvalPrompt = "auto";
-  const responseType = "code";
+    const scope = "read,activity:read_all";
+    const approvalPrompt = "auto";
+    const responseType = "code";
 
-  const url =
-    "https://www.strava.com/oauth/authorize" +
-    `?client_id=${encodeURIComponent(clientId)}` +
-    `&redirect_uri=${encodeURIComponent(redirectURI)}` +
-    `&response_type=${encodeURIComponent(responseType)}` +
-    `&approval_prompt=${encodeURIComponent(approvalPrompt)}` +
-    `&scope=${encodeURIComponent(scope)}` +
-    `&state=${encodeURIComponent(req.userId)}`;
+    const state = crypto.randomBytes(32).toString("hex");
 
-  res.json({ url });
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await StravaOAuthState.create({
+      user: req.userId,
+      state,
+      expiresAt,
+    });
+
+    const url =
+      "https://www.strava.com/oauth/authorize" +
+      `?client_id=${encodeURIComponent(clientId)}` +
+      `&redirect_uri=${encodeURIComponent(redirectURI)}` +
+      `&response_type=${encodeURIComponent(responseType)}` +
+      `&approval_prompt=${encodeURIComponent(approvalPrompt)}` +
+      `&scope=${encodeURIComponent(scope)}` +
+      `&state=${encodeURIComponent(state)}`;
+
+    res.json({ url });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 /**
@@ -285,6 +300,21 @@ router.get("/callback", async (req, res) => {
     if (!code || !state) {
       return res.status(400).json({ message: "Missing code or state" });
     }
+
+    const stateRecord = await StravaOAuthState.findOne({ state }).lean();
+    if (!stateRecord) {
+      return res.status(400).json({ message: "Invalid state" });
+    }
+
+    if (stateRecord.usedAt) {
+      return res.status(400).json({ message: "State already used" });
+    }
+
+    if (new Date(stateRecord.expiresAt) < new Date()) {
+      return res.status(400).json({ message: "State expired" });
+    }
+
+    const userId = stateRecord.user;
 
     const tokenRes = await fetch("https://www.strava.com/oauth/token", {
       method: "POST",
@@ -307,9 +337,9 @@ router.get("/callback", async (req, res) => {
     const tokenData = await tokenRes.json();
 
     await StravaConnection.findOneAndUpdate(
-      { user: state },
+      { user: userId },
       {
-        user: state,
+        user: userId,
         athleteId: tokenData.athlete?.id,
         accessToken: tokenData.access_token,
         refreshToken: tokenData.refresh_token,
@@ -318,6 +348,11 @@ router.get("/callback", async (req, res) => {
         connectedAt: new Date(),
       },
       { upsert: true, new: true },
+    );
+
+    await StravaOAuthState.updateOne(
+      { state },
+      { $set: { usedAt: new Date() } },
     );
 
     res.redirect(
