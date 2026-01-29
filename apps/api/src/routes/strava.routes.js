@@ -192,8 +192,8 @@ router.post("/sync", auth, async (req, res) => {
         const isRun = (a.sport_type || a.type) === "Run";
         if (!isRun) continue;
 
-        // 1) Save raw payload (even if summary)
-        const rawResult = await RawStravaActivity.findOneAndUpdate(
+        // 1) Save raw payload (Simplified: No counters, just save)
+        await RawStravaActivity.findOneAndUpdate(
           {
             user: req.userId,
             provider: "strava",
@@ -206,14 +206,10 @@ router.post("/sync", auth, async (req, res) => {
               fetchedAt: new Date(),
             },
           },
-          { upsert: true, rawResult: true },
+          { upsert: true, new: true }, // <--- Changed: removed rawResult: true
         );
 
-        if (!rawResult.lastErrorObject?.updatedExisting) {
-          rawUpserts++;
-        }
-
-        // 2) Save curated metrics
+        // 2) Save curated metrics (Simplified: No counters)
         const workoutDoc = mapStravaToWorkout({ userId: req.userId, a });
 
         const filter = {
@@ -222,14 +218,11 @@ router.post("/sync", auth, async (req, res) => {
           "source.activityId": String(a.id),
         };
 
-        const result = await Workout.findOneAndUpdate(
+        await Workout.findOneAndUpdate(
           filter,
           { $set: workoutDoc },
-          { upsert: true, new: true, rawResult: true },
+          { upsert: true, new: true }, // <--- Changed: removed rawResult: true
         );
-
-        if (result.lastErrorObject?.updatedExisting) updated++;
-        else created++;
 
         processed++;
       }
