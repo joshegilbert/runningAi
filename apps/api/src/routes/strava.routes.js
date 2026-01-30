@@ -356,7 +356,8 @@ router.get("/callback", async (req, res) => {
     );
 
     res.redirect(
-      (process.env.CLIENT_ORIGIN || "http://localhost:5173") + "/dashboard",
+      (process.env.CLIENT_ORIGIN || "http://localhost:5173") +
+        "/strava/connected?status=success",
     );
   } catch (err) {
     res.status(500).json({ message: err.message });

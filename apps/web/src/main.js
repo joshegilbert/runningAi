@@ -13,12 +13,15 @@ app.use(pinia);
 
 app.use(router);
 
-app.mount("#app");
+router.isReady().then(async () => {
+  const auth = useAuthStore(pinia);
 
-const auth = useAuthStore(pinia);
-
-if (auth.token) {
-  auth.fetchMe().catch((err) => {
-    console.warn("Session restore failed", err);
-  });
-}
+  if (auth.toke) {
+    try {
+      await auth.fetchMe();
+    } catch (err) {
+      console.warn("Session restore failed", err);
+    }
+  }
+  app.mount("#app");
+});
