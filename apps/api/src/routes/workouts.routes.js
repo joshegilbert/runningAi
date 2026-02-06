@@ -63,4 +63,19 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
+router.get("/:id", auth, async (req, res) => {
+  try {
+    const workout = await Workout.findOne({
+      _id: req.params.id,
+      user: req.userId,
+    });
+    if (!workout) {
+      return res.status(404).json({ message: "Workout not found." });
+    }
+    res.json({ workout });
+  } catch (err) {
+    return res.status(404).json({ message: "Workout not found." });
+  }
+});
+
 export default router;

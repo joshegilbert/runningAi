@@ -8,6 +8,17 @@ import RawStravaActivity from "../models/RawStravaActivity.js";
 
 const router = Router();
 
+function redirectToClient(res, { status, reason }) {
+  const origin = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+
+  const url = new URL("/strava/connected", origin);
+  url.searchParams.set("status", status);
+
+  if (reason) url.searchParams.set("reason", reason);
+
+  return res.redirect(url.toString());
+}
+
 /**
  * Ensures we always have a valid Strava access token.
  * Refreshes it if expired.
@@ -298,20 +309,29 @@ router.get("/callback", async (req, res) => {
     const { code, state } = req.query;
 
     if (!code || !state) {
-      return res.status(400).json({ message: "Missing code or state" });
+      return redirectToClient(res, {
+        status: "error",
+        reason: "missing_params",
+      });
     }
 
     const stateRecord = await StravaOAuthState.findOne({ state }).lean();
     if (!stateRecord) {
-      return res.status(400).json({ message: "Invalid state" });
+      return redirectToClient(res, {
+        status: "error",
+        reason: "invalid_state",
+      });
     }
 
     if (stateRecord.usedAt) {
-      return res.status(400).json({ message: "State already used" });
+      return redirectToClient(res, { status: "error", reason: "state_used" });
     }
 
     if (new Date(stateRecord.expiresAt) < new Date()) {
-      return res.status(400).json({ message: "State expired" });
+      return redirectToClient(res, {
+        status: "error",
+        reason: "state_expired",
+      });
     }
 
     const userId = stateRecord.user;
@@ -328,10 +348,10 @@ router.get("/callback", async (req, res) => {
     });
 
     if (!tokenRes.ok) {
-      const text = await tokenRes.text();
-      return res
-        .status(400)
-        .json({ message: "Strava token exchange failed", details: text });
+      return redirectToClient(res, {
+        status: "error",
+        reason: "token_exchange_failed",
+      });
     }
 
     const tokenData = await tokenRes.json();
@@ -360,7 +380,7 @@ router.get("/callback", async (req, res) => {
         "/strava/connected?status=success",
     );
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return redirectToClient(res, { status: "error", reason: "server_error" });
   }
 });
 

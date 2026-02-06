@@ -6,7 +6,6 @@ export const useWorkoutStore = defineStore("workout", () => {
   const api = createApiClient(() => localStorage.getItem("token"));
 
   const workouts = ref([]);
-
   const stravaStatus = ref(null);
 
   const isLoadingWorkouts = ref(false);
@@ -14,9 +13,16 @@ export const useWorkoutStore = defineStore("workout", () => {
   const error = ref(null);
 
   const isConnected = computed(() => stravaStatus.value?.connected ?? false);
-  const lastSyncDate = computed(() => stravaStatus.value?.lastSyncAt);
-
+  const lastSyncDate = computed(() => stravaStatus.value?.lastSyncAt ?? null);
   const hasWorkouts = computed(() => workouts.value.length > 0);
+
+  function clearError() {
+    error.value = null;
+  }
+
+  function sortWorkoutsNewestFirst(list) {
+    return [...list].sort((a, b) => new Date(b.date) - new Date(a.date));
+  }
 
   async function fetchStatus() {
     try {
@@ -24,6 +30,7 @@ export const useWorkoutStore = defineStore("workout", () => {
       stravaStatus.value = data;
     } catch (err) {
       console.error("Failed to fetch status", err);
+      // optional: error.value = "Could not check Strava status.";
     }
   }
 
@@ -31,15 +38,16 @@ export const useWorkoutStore = defineStore("workout", () => {
     if (isSyncing.value) return;
 
     isSyncing.value = true;
-    error.value = null;
+    clearError();
 
     try {
       const data = await api.post("/strava/sync");
 
       stravaStatus.value = {
-        ...stravaStatus.value,
+        ...(stravaStatus.value || {}),
         lastSyncAt: data.lastSyncAt,
       };
+
       await fetchWorkouts();
     } catch (err) {
       error.value = "Sync failed. Strava might be busy.";
@@ -50,14 +58,12 @@ export const useWorkoutStore = defineStore("workout", () => {
   }
 
   async function connectToStrava() {
-    try {
-      // 1. Ask backend for the unique Strava URL
-      const data = await api.get("/strava/connect");
+    clearError();
 
-      // 2. Redirect the browser manually
-      if (data.url) {
-        window.location.href = data.url;
-      }
+    try {
+      const data = await api.get("/strava/connect");
+      if (data.url) window.location.href = data.url;
+      else error.value = "Could not connect to Strava.";
     } catch (err) {
       console.error("Failed to get Strava URL", err);
       error.value = "Could not connect to Strava.";
@@ -66,14 +72,42 @@ export const useWorkoutStore = defineStore("workout", () => {
 
   async function fetchWorkouts() {
     isLoadingWorkouts.value = true;
+    clearError();
 
     try {
       const data = await api.get("/workouts");
-      workouts.value = data.workouts || [];
+      const list = data.workouts || [];
+      workouts.value = sortWorkoutsNewestFirst(list);
     } catch (err) {
       error.value = "Could not load activities.";
     } finally {
       isLoadingWorkouts.value = false;
+    }
+  }
+
+  // Next step for Workout Detail Page
+  async function fetchWorkoutById(id) {
+    clearError();
+    try {
+      const data = await api.get(`/workouts/${id}`);
+      return data.workout;
+    } catch (err) {
+      error.value = "Could not load that workout.";
+      throw err;
+    }
+  }
+
+  async function createWorkout(payload) {
+    clearError();
+    try {
+      const data = await api.post("/workouts", payload);
+      const created = data.workout;
+      workouts.value = sortWorkoutsNewestFirst([created, ...workouts.value]);
+      return created;
+    } catch (err) {
+      error.value =
+        err?.message || err?.data?.message || "Failed to save workout.";
+      throw err;
     }
   }
 
@@ -88,9 +122,12 @@ export const useWorkoutStore = defineStore("workout", () => {
     lastSyncDate,
     hasWorkouts,
 
+    clearError,
     fetchStatus,
     syncStrava,
     fetchWorkouts,
     connectToStrava,
+    fetchWorkoutById,
+    createWorkout,
   };
 });

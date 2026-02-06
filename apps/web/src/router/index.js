@@ -40,6 +40,18 @@ const router = createRouter({
       component: StravaConnectedPage,
       meta: { requiresAuth: true },
     },
+    {
+      path: "/workouts",
+      name: "Workouts",
+      component: () => import("../pages/WorkoutsPage.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/workouts/:id",
+      name: "workout-detail",
+      component: () => import("../pages/WorkoutDetailPage.vue"),
+      meta: { requiresAuth: true },
+    },
   ],
 });
 

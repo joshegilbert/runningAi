@@ -18,11 +18,13 @@ const error = ref("");
 
 // Helpers
 function milesToMeters(miles) {
-  return Math.round(parseFloat(miles) * 1609.34);
+  const n = parseFloat(miles);
+  return Number.isFinite(n) ? Math.round(n * 1609.34) : 0;
 }
 
 function minutesToSeconds(minutes) {
-  return Math.round(parseFloat(minutes) * 60);
+  const n = parseFloat(minutes);
+  return Number.isFinite(n) ? Math.round(n * 60) : 0;
 }
 
 async function handleSubmit() {
@@ -43,7 +45,7 @@ async function handleSubmit() {
     await workoutStore.createWorkout(payload);
     router.push("/dashboard");
   } catch (err) {
-    error.value = "Failed to save workout. Please try again.";
+    error.value = err?.message || "Failed to save workout. Please try again.";
   } finally {
     loading.value = false;
   }
