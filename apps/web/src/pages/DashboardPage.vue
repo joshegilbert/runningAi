@@ -4,10 +4,12 @@ import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useWorkoutStore } from "../stores/workout";
 import MainLayout from "../layouts/MainLayout.vue";
+import { useRecommendationStore } from "../stores/recommendation";
 
 const router = useRouter();
 const auth = useAuthStore();
 const workoutStore = useWorkoutStore();
+const recommendationStore = useRecommendationStore();
 
 // --- HELPERS ---
 function goToLogWorkout() {
@@ -47,6 +49,17 @@ function formatTime(dateStr) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatRecChip(rec) {
+  if (!rec?.workout) return "";
+  const w = rec.workout;
+  const amount = w.durationMinutes
+    ? `${w.durationMinutes} min`
+    : w.distanceMiles
+      ? `${w.distanceMiles} mi`
+      : "Rest";
+  return `${amount} • ${w.type}`;
 }
 
 // --- LOGIC: WEEKLY STATS ---
@@ -95,6 +108,7 @@ function handleSyncClick() {
 onMounted(() => {
   workoutStore.fetchStatus();
   workoutStore.fetchWorkouts();
+  recommendationStore.fetchToday();
 });
 </script>
 
@@ -314,40 +328,76 @@ onMounted(() => {
             ></div>
 
             <div class="relative z-10">
-              <div class="flex items-center gap-2 mb-4">
-                <div class="p-1.5 bg-indigo-800 rounded-md">
-                  <svg
-                    class="w-4 h-4 text-yellow-300"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                  <div class="p-1.5 bg-indigo-800 rounded-md">
+                    <svg
+                      class="w-4 h-4 text-yellow-300"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"
+                        fill-rule="evenodd"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                  </div>
+
+                  <span
+                    class="text-xs font-bold uppercase tracking-widest text-indigo-300"
                   >
-                    <path
-                      d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"
-                      fill-rule="evenodd"
-                      clip-rule="evenodd"
-                    ></path>
-                  </svg>
+                    Coach Insight
+                  </span>
                 </div>
-                <span
-                  class="text-xs font-bold uppercase tracking-widest text-indigo-300"
+
+                <button
+                  @click="recommendationStore.fetchToday()"
+                  :disabled="recommendationStore.isLoading"
+                  class="text-[11px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg border border-indigo-700 bg-indigo-800/50 hover:bg-indigo-800 transition-colors disabled:opacity-60"
                 >
-                  Coach Insight
-                </span>
+                  {{
+                    recommendationStore.isLoading
+                      ? "Loading..."
+                      : recommendationStore.today
+                        ? "Refresh"
+                        : "Get"
+                  }}
+                </button>
               </div>
 
-              <div class="relative z-10 text-center py-2">
-                <div
-                  class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-800/50 border border-indigo-700 text-indigo-200 text-[10px] font-bold uppercase tracking-widest mb-3"
-                >
-                  Coming Soon
-                </div>
-                <h4 class="font-bold text-lg mb-1">AI Coach</h4>
-                <p
-                  class="font-medium text-indigo-200 text-xs leading-relaxed max-w-[200px] mx-auto"
-                >
-                  Personalized training insights and race predictions are
-                  currently in development.
+              <div
+                v-if="recommendationStore.error"
+                class="text-sm text-red-200"
+              >
+                {{ recommendationStore.error }}
+              </div>
+
+              <div
+                v-else-if="!recommendationStore.today"
+                class="text-indigo-200 text-sm leading-relaxed"
+              >
+                Tap
+                <span class="font-semibold text-white">Get</span>
+                to see today’s recommended run.
+              </div>
+
+              <div v-else class="space-y-2">
+                <h4 class="font-bold text-lg leading-tight">
+                  {{ recommendationStore.today.headline }}
+                </h4>
+
+                <p class="text-indigo-200 text-xs leading-relaxed">
+                  {{ recommendationStore.today.details }}
                 </p>
+
+                <div class="pt-2">
+                  <div
+                    class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-800/50 border border-indigo-700 text-indigo-100 text-[10px] font-bold uppercase tracking-widest"
+                  >
+                    {{ formatRecChip(recommendationStore.today) }}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

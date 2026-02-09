@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import { createApiClient } from "../services/api";
+import { useRecommendationStore } from "./recommendation";
 
 export const useWorkoutStore = defineStore("workout", () => {
   const api = createApiClient(() => localStorage.getItem("token"));
@@ -49,6 +50,14 @@ export const useWorkoutStore = defineStore("workout", () => {
       };
 
       await fetchWorkouts();
+
+      try {
+        const recStore = useRecommendationStore();
+        await recStore.regenerateToday();
+      } catch (e) {
+        // Don't fail sync if recommendation fails
+        console.warn("Recommendation regenerate failed:", e);
+      }
     } catch (err) {
       error.value = "Sync failed. Strava might be busy.";
       throw err;
