@@ -4,7 +4,7 @@ import LoginPage from "../pages/LoginPage.vue";
 import DashboardPage from "../pages/DashboardPage.vue";
 import RegisterPage from "../pages/RegisterPage.vue";
 import LogWorkoutPage from "../pages/LogWorkoutPage.vue";
-
+import StravaConnectedPage from "../pages/StravaConnectedPage.vue";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -26,7 +26,7 @@ const router = createRouter({
       path: "/workouts/new",
       name: "workouts-new",
       component: LogWorkoutPage,
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true },
     },
     {
       path: "/register",
@@ -34,6 +34,23 @@ const router = createRouter({
       meta: {
         requiresGuest: true,
       },
+    },
+    {
+      path: "/strava/connected",
+      component: StravaConnectedPage,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/workouts",
+      name: "Workouts",
+      component: () => import("../pages/WorkoutsPage.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/workouts/:id",
+      name: "workout-detail",
+      component: () => import("../pages/WorkoutDetailPage.vue"),
+      meta: { requiresAuth: true },
     },
   ],
 });
@@ -49,17 +66,13 @@ router.beforeEach(async (to) => {
     }
   }
 
-  const loggedIn = !!auth.token;
+  const isAuthenticated = auth.isAuthenticated;
 
-  if (to.meta.requiresAuth && !loggedIn) {
+  if (to.meta.requiresAuth && !isAuthenticated) {
     return "/login";
   }
 
-  if (to.path == "/login" && loggedIn) {
-    return "/dashboard";
-  }
-
-  if (to.meta.requiresGuest && loggedIn) {
+  if (to.meta.requiresGuest && isAuthenticated) {
     return "/dashboard";
   }
 });

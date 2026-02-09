@@ -4,7 +4,7 @@ import App from "./App.vue";
 import router from "./router";
 import { useAuthStore } from "./stores/auth";
 
-import "./style.css";
+import "./assets/main.css";
 
 const app = createApp(App);
 
@@ -13,12 +13,15 @@ app.use(pinia);
 
 app.use(router);
 
-app.mount("#app");
+router.isReady().then(async () => {
+  const auth = useAuthStore(pinia);
 
-const auth = useAuthStore(pinia);
-
-if (auth.token) {
-  auth.fetchMe().catch((err) => {
-    console.warn("Session restore failed", err);
-  });
-}
+  if (auth.toke) {
+    try {
+      await auth.fetchMe();
+    } catch (err) {
+      console.warn("Session restore failed", err);
+    }
+  }
+  app.mount("#app");
+});
