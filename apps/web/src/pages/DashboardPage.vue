@@ -4,10 +4,12 @@ import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useWorkoutStore } from "../stores/workout";
 import MainLayout from "../layouts/MainLayout.vue";
+import { useRecommendationStore } from "../stores/recommendation";
 
 const router = useRouter();
 const auth = useAuthStore();
 const workoutStore = useWorkoutStore();
+const recommendationStore = useRecommendationStore();
 
 // --- HELPERS ---
 function goToLogWorkout() {
@@ -47,6 +49,17 @@ function formatTime(dateStr) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatRecChip(rec) {
+  if (!rec?.workout) return "";
+  const w = rec.workout;
+  const amount = w.durationMinutes
+    ? `${w.durationMinutes} min`
+    : w.distanceMiles
+      ? `${w.distanceMiles} mi`
+      : "Rest";
+  return `${amount} • ${w.type}`;
 }
 
 // --- LOGIC: WEEKLY STATS ---
@@ -95,6 +108,7 @@ function handleSyncClick() {
 onMounted(() => {
   workoutStore.fetchStatus();
   workoutStore.fetchWorkouts();
+  recommendationStore.fetchToday();
 });
 </script>
 
@@ -118,39 +132,26 @@ onMounted(() => {
         </div>
 
         <div class="flex items-center gap-3">
-          <div class="flex flex-col items-end">
+          <!-- Sync (only when connected) -->
+          <div v-if="workoutStore.isConnected" class="flex flex-col items-end">
             <button
               @click="handleSyncClick"
               :disabled="workoutStore.isSyncing"
-              class="text-xs font-medium transition-colors flex items-center gap-2 px-3 py-2 rounded-lg border"
-              :class="
-                workoutStore.isConnected
-                  ? 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                  : 'bg-slate-900 border-slate-900 text-white hover:bg-slate-800'
-              "
+              class="text-xs font-medium transition-colors flex items-center gap-2 px-3 py-2 rounded-lg border bg-white border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
             >
               <span v-if="workoutStore.isSyncing" class="animate-spin">↻</span>
-              <span
-                v-else-if="workoutStore.isConnected"
-                class="w-2 h-2 rounded-full bg-emerald-500"
-              ></span>
-
-              {{
-                workoutStore.isSyncing
-                  ? "Syncing..."
-                  : workoutStore.isConnected
-                    ? "Sync Now"
-                    : "Connect Strava"
-              }}
+              <span v-else>Sync latest runs</span>
             </button>
+
             <span
-              v-if="workoutStore.isConnected && workoutStore.lastSyncDate"
+              v-if="workoutStore.lastSyncDate"
               class="text-[10px] text-slate-400 mt-1 mr-1"
             >
-              Synced {{ formatTime(workoutStore.lastSyncDate) }}
+              Last synced {{ formatTime(workoutStore.lastSyncDate) }}
             </span>
           </div>
 
+          <!-- Primary CTA -->
           <button
             @click="goToLogWorkout"
             class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm shadow-indigo-200"
@@ -314,67 +315,142 @@ onMounted(() => {
             ></div>
 
             <div class="relative z-10">
-              <div class="flex items-center gap-2 mb-4">
-                <div class="p-1.5 bg-indigo-800 rounded-md">
-                  <svg
-                    class="w-4 h-4 text-yellow-300"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                  <div class="p-1.5 bg-indigo-800 rounded-md">
+                    <svg
+                      class="w-4 h-4 text-yellow-300"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"
+                        fill-rule="evenodd"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                  </div>
+
+                  <span
+                    class="text-xs font-bold uppercase tracking-widest text-indigo-300"
                   >
-                    <path
-                      d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"
-                      fill-rule="evenodd"
-                      clip-rule="evenodd"
-                    ></path>
-                  </svg>
+                    Coach Insight
+                  </span>
                 </div>
-                <span
-                  class="text-xs font-bold uppercase tracking-widest text-indigo-300"
+
+                <button
+                  @click="recommendationStore.fetchToday()"
+                  :disabled="recommendationStore.isLoading"
+                  class="text-[11px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg border border-indigo-700 bg-indigo-800/50 hover:bg-indigo-800 transition-colors disabled:opacity-60"
                 >
-                  Coach Insight
-                </span>
+                  {{
+                    recommendationStore.isLoading
+                      ? "Loading..."
+                      : recommendationStore.today
+                        ? "Refresh"
+                        : "Get"
+                  }}
+                </button>
               </div>
 
-              <div class="relative z-10 text-center py-2">
-                <div
-                  class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-800/50 border border-indigo-700 text-indigo-200 text-[10px] font-bold uppercase tracking-widest mb-3"
-                >
-                  Coming Soon
-                </div>
-                <h4 class="font-bold text-lg mb-1">AI Coach</h4>
-                <p
-                  class="font-medium text-indigo-200 text-xs leading-relaxed max-w-[200px] mx-auto"
-                >
-                  Personalized training insights and race predictions are
-                  currently in development.
+              <div
+                v-if="recommendationStore.error"
+                class="text-sm text-red-200"
+              >
+                {{ recommendationStore.error }}
+              </div>
+
+              <div
+                v-else-if="!recommendationStore.today"
+                class="text-indigo-200 text-sm leading-relaxed"
+              >
+                Tap
+                <span class="font-semibold text-white">Get</span>
+                to see today’s recommended run.
+              </div>
+
+              <div v-else class="space-y-2">
+                <h4 class="font-bold text-lg leading-tight">
+                  {{ recommendationStore.today.headline }}
+                </h4>
+
+                <p class="text-indigo-200 text-xs leading-relaxed">
+                  {{ recommendationStore.today.details }}
                 </p>
+
+                <div class="pt-2">
+                  <div
+                    class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-800/50 border border-indigo-700 text-indigo-100 text-[10px] font-bold uppercase tracking-widest"
+                  >
+                    {{ formatRecChip(recommendationStore.today) }}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           <div class="bg-white rounded-xl border border-slate-200 p-4">
             <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-3">
                 <div
-                  class="w-8 h-8 bg-[#FC4C02] rounded-md flex items-center justify-center text-white font-bold text-xs"
+                  class="w-9 h-9 bg-[#FC4C02] rounded-md flex items-center justify-center text-white font-bold text-sm"
                 >
                   S
                 </div>
+
                 <div>
                   <span
-                    class="block text-sm font-medium text-slate-700 leading-none"
+                    class="block text-sm font-semibold text-slate-800 leading-none"
                   >
                     Strava
                   </span>
-                  <span class="text-[10px] text-slate-400">
-                    {{ workoutStore.isConnected ? "Connected" : "Not Linked" }}
+
+                  <span class="text-[11px] text-slate-400">
+                    {{
+                      workoutStore.isConnected ? "Connected" : "Not connected"
+                    }}
                   </span>
                 </div>
               </div>
+
+              <!-- Connected status indicator -->
               <div
                 v-if="workoutStore.isConnected"
-                class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"
+                class="w-2.5 h-2.5 bg-emerald-500 rounded-full"
+                title="Connected"
               ></div>
+            </div>
+
+            <!-- Divider -->
+            <div class="border-t border-slate-100 my-3"></div>
+
+            <!-- Not connected state -->
+            <div v-if="!workoutStore.isConnected" class="space-y-2">
+              <p class="text-xs text-slate-500 leading-relaxed">
+                Connect your Strava account to automatically import runs and
+                track your training progress.
+              </p>
+
+              <button
+                @click="workoutStore.connectToStrava()"
+                class="w-full bg-[#FC4C02] hover:bg-[#e64500] text-white text-sm font-semibold py-2 rounded-lg transition-colors"
+              >
+                Connect Strava
+              </button>
+            </div>
+
+            <!-- Connected state -->
+            <div v-else class="space-y-1">
+              <p class="text-xs text-slate-500">
+                Your Strava account is linked.
+              </p>
+
+              <p
+                v-if="workoutStore.lastSyncDate"
+                class="text-[11px] text-slate-400"
+              >
+                Last synced {{ formatTime(workoutStore.lastSyncDate) }}
+              </p>
             </div>
           </div>
         </div>
