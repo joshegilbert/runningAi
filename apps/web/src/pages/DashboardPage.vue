@@ -132,39 +132,26 @@ onMounted(() => {
         </div>
 
         <div class="flex items-center gap-3">
-          <div class="flex flex-col items-end">
+          <!-- Sync (only when connected) -->
+          <div v-if="workoutStore.isConnected" class="flex flex-col items-end">
             <button
               @click="handleSyncClick"
               :disabled="workoutStore.isSyncing"
-              class="text-xs font-medium transition-colors flex items-center gap-2 px-3 py-2 rounded-lg border"
-              :class="
-                workoutStore.isConnected
-                  ? 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                  : 'bg-slate-900 border-slate-900 text-white hover:bg-slate-800'
-              "
+              class="text-xs font-medium transition-colors flex items-center gap-2 px-3 py-2 rounded-lg border bg-white border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
             >
               <span v-if="workoutStore.isSyncing" class="animate-spin">↻</span>
-              <span
-                v-else-if="workoutStore.isConnected"
-                class="w-2 h-2 rounded-full bg-emerald-500"
-              ></span>
-
-              {{
-                workoutStore.isSyncing
-                  ? "Syncing..."
-                  : workoutStore.isConnected
-                    ? "Sync Now"
-                    : "Connect Strava"
-              }}
+              <span v-else>Sync latest runs</span>
             </button>
+
             <span
-              v-if="workoutStore.isConnected && workoutStore.lastSyncDate"
+              v-if="workoutStore.lastSyncDate"
               class="text-[10px] text-slate-400 mt-1 mr-1"
             >
-              Synced {{ formatTime(workoutStore.lastSyncDate) }}
+              Last synced {{ formatTime(workoutStore.lastSyncDate) }}
             </span>
           </div>
 
+          <!-- Primary CTA -->
           <button
             @click="goToLogWorkout"
             class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm shadow-indigo-200"
@@ -404,27 +391,66 @@ onMounted(() => {
 
           <div class="bg-white rounded-xl border border-slate-200 p-4">
             <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-3">
                 <div
-                  class="w-8 h-8 bg-[#FC4C02] rounded-md flex items-center justify-center text-white font-bold text-xs"
+                  class="w-9 h-9 bg-[#FC4C02] rounded-md flex items-center justify-center text-white font-bold text-sm"
                 >
                   S
                 </div>
+
                 <div>
                   <span
-                    class="block text-sm font-medium text-slate-700 leading-none"
+                    class="block text-sm font-semibold text-slate-800 leading-none"
                   >
                     Strava
                   </span>
-                  <span class="text-[10px] text-slate-400">
-                    {{ workoutStore.isConnected ? "Connected" : "Not Linked" }}
+
+                  <span class="text-[11px] text-slate-400">
+                    {{
+                      workoutStore.isConnected ? "Connected" : "Not connected"
+                    }}
                   </span>
                 </div>
               </div>
+
+              <!-- Connected status indicator -->
               <div
                 v-if="workoutStore.isConnected"
-                class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"
+                class="w-2.5 h-2.5 bg-emerald-500 rounded-full"
+                title="Connected"
               ></div>
+            </div>
+
+            <!-- Divider -->
+            <div class="border-t border-slate-100 my-3"></div>
+
+            <!-- Not connected state -->
+            <div v-if="!workoutStore.isConnected" class="space-y-2">
+              <p class="text-xs text-slate-500 leading-relaxed">
+                Connect your Strava account to automatically import runs and
+                track your training progress.
+              </p>
+
+              <button
+                @click="workoutStore.connectToStrava()"
+                class="w-full bg-[#FC4C02] hover:bg-[#e64500] text-white text-sm font-semibold py-2 rounded-lg transition-colors"
+              >
+                Connect Strava
+              </button>
+            </div>
+
+            <!-- Connected state -->
+            <div v-else class="space-y-1">
+              <p class="text-xs text-slate-500">
+                Your Strava account is linked.
+              </p>
+
+              <p
+                v-if="workoutStore.lastSyncDate"
+                class="text-[11px] text-slate-400"
+              >
+                Last synced {{ formatTime(workoutStore.lastSyncDate) }}
+              </p>
             </div>
           </div>
         </div>
