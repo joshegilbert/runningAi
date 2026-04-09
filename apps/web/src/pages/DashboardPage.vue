@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useWorkoutStore } from "../stores/workout";
@@ -10,6 +10,7 @@ const router = useRouter();
 const auth = useAuthStore();
 const workoutStore = useWorkoutStore();
 const recommendationStore = useRecommendationStore();
+const showCoachPlan = ref(false);
 
 // --- HELPERS ---
 function goToLogWorkout() {
@@ -18,6 +19,10 @@ function goToLogWorkout() {
 
 function goToHistory() {
   router.push("/workouts");
+}
+
+function goToProfile() {
+  router.push("/profile");
 }
 
 function meterToMiles(meters) {
@@ -51,6 +56,14 @@ function formatTime(dateStr) {
   });
 }
 
+function paceMinToString(minPerMile) {
+  const n = Number(minPerMile);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  const m = Math.floor(n);
+  const s = Math.round((n - m) * 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 function formatRecChip(rec) {
   if (!rec?.workout) return "";
   const w = rec.workout;
@@ -61,6 +74,37 @@ function formatRecChip(rec) {
       : "Rest";
   return `${amount} • ${w.type}`;
 }
+
+const targetsLine = computed(() => {
+  const rec = recommendationStore.today;
+  const t = rec?.workout?.targets;
+  if (!t) return "";
+
+  const parts = [];
+  if (t.paceMinPerMileLow && t.paceMinPerMileHigh) {
+    const low = paceMinToString(t.paceMinPerMileLow);
+    const high = paceMinToString(t.paceMinPerMileHigh);
+    if (low && high) parts.push(`Pace ${low}–${high}/mi`);
+  }
+  if (t.hrBpmLow && t.hrBpmHigh) parts.push(`HR ${t.hrBpmLow}–${t.hrBpmHigh} bpm`);
+  if (t.rpeLow && t.rpeHigh) parts.push(`RPE ${t.rpeLow}–${t.rpeHigh}`);
+
+  return parts.join(" • ");
+});
+
+const fallbackLine = computed(() => {
+  const fb = recommendationStore.today?.fallback;
+  if (!fb) return "";
+  const amount = fb.durationMinutes
+    ? `${fb.durationMinutes} min`
+    : fb.distanceMiles
+      ? `${fb.distanceMiles} mi`
+      : fb.type === "rest"
+        ? "Rest"
+        : "";
+  if (!amount) return "";
+  return `${amount} • ${fb.type || "easy"}`;
+});
 
 // --- LOGIC: WEEKLY STATS ---
 const thisWeeksWorkouts = computed(() => {
@@ -385,6 +429,35 @@ onMounted(() => {
                     {{ formatRecChip(recommendationStore.today) }}
                   </div>
                 </div>
+
+                <div v-if="targetsLine" class="text-indigo-100/90 text-[11px] leading-relaxed">
+                  <span class="font-bold text-indigo-200 uppercase tracking-widest mr-2">
+                    Targets
+                  </span>
+                  {{ targetsLine }}
+                </div>
+
+                <div v-if="fallbackLine" class="text-indigo-100/90 text-[11px] leading-relaxed">
+                  <span class="font-bold text-indigo-200 uppercase tracking-widest mr-2">
+                    Fallback
+                  </span>
+                  {{ fallbackLine }}
+                </div>
+
+                <div class="pt-3 flex items-center gap-2">
+                  <button
+                    @click="showCoachPlan = true"
+                    class="text-[11px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg border border-indigo-700 bg-indigo-800/50 hover:bg-indigo-800 transition-colors"
+                  >
+                    View plan
+                  </button>
+                  <button
+                    @click="goToProfile"
+                    class="text-[11px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg border border-indigo-700 bg-indigo-800/20 hover:bg-indigo-800/40 transition-colors"
+                  >
+                    Edit profile
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -453,6 +526,157 @@ onMounted(() => {
               </p>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Coach plan modal -->
+    <div
+      v-if="showCoachPlan"
+      class="fixed inset-0 z-50 flex items-center justify-center px-4"
+    >
+      <div
+        class="absolute inset-0 bg-slate-900/60"
+        @click="showCoachPlan = false"
+      ></div>
+
+      <div
+        class="relative w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden"
+      >
+        <div class="p-5 border-b border-slate-100 flex items-start justify-between gap-4">
+          <div>
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              Today’s plan
+            </div>
+            <div class="text-lg font-black text-slate-900 mt-1">
+              {{ recommendationStore.today?.headline || "Coach Plan" }}
+            </div>
+            <div class="text-xs text-slate-500 mt-1">
+              {{ formatRecChip(recommendationStore.today) }}
+            </div>
+          </div>
+          <button
+            @click="showCoachPlan = false"
+            class="text-sm font-bold text-slate-400 hover:text-slate-700"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div class="p-5 space-y-5">
+          <div v-if="targetsLine" class="bg-slate-50 rounded-xl border border-slate-200 p-4">
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              Targets
+            </div>
+            <div class="text-sm text-slate-800 mt-2">
+              {{ targetsLine }}
+            </div>
+          </div>
+
+          <div
+            v-if="recommendationStore.today?.workout?.steps?.length"
+            class="space-y-2"
+          >
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              Steps
+            </div>
+            <div class="space-y-2">
+              <div
+                v-for="(s, idx) in recommendationStore.today.workout.steps"
+                :key="idx"
+                class="bg-white rounded-xl border border-slate-200 p-4"
+              >
+                <div class="flex items-start justify-between gap-4">
+                  <div class="font-bold text-slate-900">
+                    {{ s.label || "Step" }}
+                  </div>
+                  <div class="text-xs font-mono text-slate-600">
+                    {{
+                      s.durationMinutes
+                        ? `${s.durationMinutes} min`
+                        : s.distanceMiles
+                          ? `${s.distanceMiles} mi`
+                          : ""
+                    }}
+                  </div>
+                </div>
+                <div v-if="s.target" class="text-[11px] text-slate-600 mt-2">
+                  <span v-if="s.target.paceMinPerMileLow && s.target.paceMinPerMileHigh">
+                    Pace {{ paceMinToString(s.target.paceMinPerMileLow) }}–{{
+                      paceMinToString(s.target.paceMinPerMileHigh)
+                    }}/mi
+                  </span>
+                  <span v-if="s.target.hrBpmLow && s.target.hrBpmHigh">
+                    <span v-if="s.target.paceMinPerMileLow && s.target.paceMinPerMileHigh">
+                      •
+                    </span>
+                    HR {{ s.target.hrBpmLow }}–{{ s.target.hrBpmHigh }} bpm
+                  </span>
+                  <span v-if="s.target.rpeLow && s.target.rpeHigh">
+                    <span
+                      v-if="
+                        (s.target.paceMinPerMileLow && s.target.paceMinPerMileHigh) ||
+                        (s.target.hrBpmLow && s.target.hrBpmHigh)
+                      "
+                    >
+                      •
+                    </span>
+                    RPE {{ s.target.rpeLow }}–{{ s.target.rpeHigh }}
+                  </span>
+                </div>
+                <div v-if="s.notes" class="text-xs text-slate-600 mt-2">
+                  {{ s.notes }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-if="recommendationStore.today?.rationale?.length"
+            class="space-y-2"
+          >
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              Why this
+            </div>
+            <ul class="space-y-2">
+              <li
+                v-for="(r, idx) in recommendationStore.today.rationale"
+                :key="idx"
+                class="text-sm text-slate-700 flex gap-2"
+              >
+                <span class="text-slate-400">•</span>
+                <span>{{ r }}</span>
+              </li>
+            </ul>
+          </div>
+
+          <div v-if="recommendationStore.today?.fallback" class="bg-amber-50 rounded-xl border border-amber-100 p-4">
+            <div class="text-xs font-bold text-amber-700 uppercase tracking-widest">
+              Fallback
+            </div>
+            <div class="text-sm font-semibold text-amber-900 mt-2">
+              {{ fallbackLine }}
+            </div>
+            <div v-if="recommendationStore.today.fallback?.notes" class="text-xs text-amber-900/80 mt-2">
+              {{ recommendationStore.today.fallback.notes }}
+            </div>
+          </div>
+        </div>
+
+        <div class="p-5 border-t border-slate-100 flex justify-end gap-2">
+          <button
+            @click="showCoachPlan = false"
+            class="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50"
+          >
+            Close
+          </button>
+          <button
+            @click="goToProfile"
+            class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
+          >
+            Edit profile
+          </button>
         </div>
       </div>
     </div>
