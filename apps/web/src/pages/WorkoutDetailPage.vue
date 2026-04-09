@@ -270,7 +270,7 @@ onMounted(async () => {
             </div>
             <div>
               <span class="text-slate-500">Timezone:</span>
-              {{ workout.source?.timezone || "—" }}
+              {{ workout.timezone || "—" }}
             </div>
           </div>
         </div>
