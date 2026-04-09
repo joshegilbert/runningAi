@@ -24,6 +24,54 @@ const dailyRecommendationSchema = new mongoose.Schema(
       },
       durationMinutes: { type: Number, default: null, min: 0 },
       distanceMiles: { type: Number, default: null, min: 0 },
+
+      // Optional structured prescription segments
+      steps: {
+        type: [
+          {
+            label: { type: String, default: "", maxlength: 40 }, // warmup/main/cooldown/etc
+            durationMinutes: { type: Number, default: null, min: 0 },
+            distanceMiles: { type: Number, default: null, min: 0 },
+            target: {
+              rpeLow: { type: Number, default: null, min: 1, max: 10 },
+              rpeHigh: { type: Number, default: null, min: 1, max: 10 },
+              hrBpmLow: { type: Number, default: null, min: 40, max: 240 },
+              hrBpmHigh: { type: Number, default: null, min: 40, max: 240 },
+              paceMinPerMileLow: { type: Number, default: null, min: 3, max: 30 },
+              paceMinPerMileHigh: {
+                type: Number,
+                default: null,
+                min: 3,
+                max: 30,
+              },
+            },
+            notes: { type: String, default: "", maxlength: 300 },
+          },
+        ],
+        default: undefined,
+      },
+
+      targets: {
+        rpeLow: { type: Number, default: null, min: 1, max: 10 },
+        rpeHigh: { type: Number, default: null, min: 1, max: 10 },
+        hrBpmLow: { type: Number, default: null, min: 40, max: 240 },
+        hrBpmHigh: { type: Number, default: null, min: 40, max: 240 },
+        paceMinPerMileLow: { type: Number, default: null, min: 3, max: 30 },
+        paceMinPerMileHigh: { type: Number, default: null, min: 3, max: 30 },
+      },
+    },
+
+    rationale: { type: [String], default: undefined },
+
+    fallback: {
+      type: {
+        type: String,
+        enum: ["easy", "tempo", "intervals", "long", "rest"],
+        default: null,
+      },
+      durationMinutes: { type: Number, default: null, min: 0 },
+      distanceMiles: { type: Number, default: null, min: 0 },
+      notes: { type: String, default: "", maxlength: 800 },
     },
 
     meta: {

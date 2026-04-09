@@ -6,7 +6,7 @@ function withTimeout(ms) {
   return { controller, cancel: () => clearTimeout(id) };
 }
 
-export async function callLLM({ messages, temperature = 0.7 }) {
+export async function callLLM({ messages, temperature = 0.7, responseFormat }) {
   const baseUrl = process.env.LLM_BASE_URL; // e.g. https://api.your-llm.com/v1
   const apiKey = process.env.LLM_API_KEY;
   const model = process.env.LLM_MODEL || "gpt-4o-mini"; // placeholder default
@@ -31,7 +31,8 @@ export async function callLLM({ messages, temperature = 0.7 }) {
         model,
         messages,
         temperature,
-        // If your provider supports it, you can add response_format here later
+        // Optional: some providers support forcing JSON output
+        ...(responseFormat ? { response_format: responseFormat } : {}),
       }),
     });
 

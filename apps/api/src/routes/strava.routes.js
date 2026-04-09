@@ -93,15 +93,16 @@ function mapStravaToWorkout({ userId, a }) {
 
     sportType: a.sport_type || a.type || "Run",
 
+    startDateLocal: a.start_date_local ? new Date(a.start_date_local) : null,
+    timezone: a.timezone || "",
+    utcOffsetSeconds: typeof a.utc_offset === "number" ? a.utc_offset : null,
+
     metricsVersion: 1,
     ingestedAt: new Date(),
 
     source: {
       provider: "strava",
       activityId: String(a.id),
-
-      startDateLocal: a.start_date_local ? new Date(a.start_date_local) : null,
-      timezone: a.timezone || "",
       deviceName: a.device_name || "",
     },
   };
