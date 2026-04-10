@@ -23,7 +23,7 @@ export const useRecommendationStore = defineStore("recommendation", () => {
       return today.value;
     } catch (err) {
       error.value = err?.message || "Could not load today’s recommendation.";
-      throw err;
+      return null;
     } finally {
       isLoading.value = false;
     }
@@ -40,7 +40,7 @@ export const useRecommendationStore = defineStore("recommendation", () => {
       return today.value;
     } catch (err) {
       error.value = err?.message || "Could not regenerate recommendation.";
-      throw err;
+      return null;
     } finally {
       isLoading.value = false;
     }

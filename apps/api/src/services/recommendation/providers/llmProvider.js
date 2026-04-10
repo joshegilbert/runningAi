@@ -1,4 +1,4 @@
-import { callLLM } from "../llmClient.js";
+import { callLLMWithRetry } from "../llmClient.js";
 
 function metersToMiles(m) {
   return (m || 0) / 1609.34;
@@ -312,6 +312,232 @@ function parseJsonLenient(content) {
   }
 }
 
+function targetsFromProfileEasy(trainingProfile) {
+  const e = trainingProfile?.zones?.easy;
+  if (!e) return {};
+  const low = safeNumber(e.paceMinPerMileLow);
+  const high = safeNumber(e.paceMinPerMileHigh);
+  const hrLo = safeNumber(e.hrBpmLow);
+  const hrHi = safeNumber(e.hrBpmHigh);
+  const t = {};
+  if (low != null && high != null) {
+    t.paceMinPerMileLow = low;
+    t.paceMinPerMileHigh = high;
+  }
+  if (hrLo != null && hrHi != null) {
+    t.hrBpmLow = hrLo;
+    t.hrBpmHigh = hrHi;
+  }
+  return pickTargets(t);
+}
+
+function buildDeterministicFallback({
+  loadSummary,
+  maxDurationMinutes,
+  trainingProfile,
+  todayISO,
+  reason,
+}) {
+  let duration = 30;
+  const miles7 = loadSummary?.last7?.totalMiles ?? 0;
+  if (miles7 > 35) duration = 25;
+  else if (miles7 < 5) duration = 25;
+
+  if (maxDurationMinutes != null) {
+    duration = Math.min(duration, maxDurationMinutes);
+  }
+  duration = Math.max(10, Math.min(120, Math.round(duration)));
+
+  const daysHard = loadSummary?.daysSinceHard;
+  if (daysHard != null && daysHard < 2) {
+    duration = Math.min(duration, maxDurationMinutes ?? 35, 30);
+  }
+
+  const fbDur = Math.max(10, Math.round(duration * 0.55));
+
+  const easyTargets = targetsFromProfileEasy(trainingProfile);
+
+  const obj = {
+    workout: {
+      type: "easy",
+      durationMinutes: duration,
+      distanceMiles: null,
+      steps: undefined,
+      targets: easyTargets,
+    },
+    headline: "Easy run (offline suggestion)",
+    details:
+      "We couldn’t reach the AI coach just now. Here’s a safe, conservative easy run you can do today. Tap refresh later for a personalized plan.",
+    rationale: [
+      "Offline fallback while the coach service is unavailable.",
+      loadSummary?.last14?.workouts != null
+        ? `Last 14 days: ${loadSummary.last14.workouts} run(s) logged, ~${loadSummary.last14.totalMiles} mi.`
+        : "Keep logging runs so the coach can tailor future days.",
+    ],
+    fallback: {
+      type: "easy",
+      durationMinutes: fbDur,
+      distanceMiles: null,
+      notes:
+        "If you’re tired or short on time: shorten to this easier option and keep effort conversational.",
+    },
+  };
+
+  let validated = validateRecommendationJson(obj, { maxDurationMinutes });
+  if (!validated.ok) {
+    const minimal = {
+      workout: { type: "easy", durationMinutes: 20, distanceMiles: null },
+      headline: "Easy 20 minutes",
+      details: "Offline suggestion — keep effort easy.",
+      rationale: ["Offline fallback."],
+      fallback: {
+        type: "easy",
+        durationMinutes: 12,
+        distanceMiles: null,
+        notes: "Very easy 10–12 minutes if needed.",
+      },
+    };
+    validated = validateRecommendationJson(minimal, { maxDurationMinutes });
+  }
+
+  if (!validated.ok) {
+    throw new Error(`Fallback validation failed: ${validated.error}`);
+  }
+
+  return {
+    ...validated.value,
+    meta: {
+      provider: "fallback",
+      model: "",
+      fallbackReason: String(reason?.message || reason || "unknown"),
+      inputs: {
+        promptVersion: String(process.env.PROMPT_VERSION || "v2"),
+        date: todayISO,
+        loadSummary,
+        hasTrainingProfile: Boolean(trainingProfile),
+      },
+      raw: "",
+    },
+  };
+}
+
+async function generateRecommendationViaLlmInner({
+  workouts,
+  trainingProfile,
+  todayISO,
+}) {
+  const today = startOfTodayUTC();
+  const dateISO = todayISO || today.toISOString().slice(0, 10);
+
+  const trimmed = trimWorkoutsForLLM(workouts);
+  const loadSummary = summarizeTrainingLoad(workouts);
+
+  const maxDurationMinutes =
+    safeNumber(trainingProfile?.availability?.timePerDayMinutes) ?? null;
+
+  const user = {
+    role: "user",
+    content: JSON.stringify(
+      {
+        date: dateISO,
+        trainingProfile: trainingProfile || null,
+        loadSummary,
+        recentWorkouts: trimmed,
+        note: "Recommend a run for today. Make it specific: include targets and a fallback option.",
+      },
+      null,
+      2,
+    ),
+  };
+
+  const responseFormat =
+    String(process.env.LLM_RESPONSE_FORMAT || "").toLowerCase() === "json_object"
+      ? { type: "json_object" }
+      : undefined;
+
+  const { content, modelUsed } = await callLLMWithRetry(
+    {
+      messages: [{ role: "system", content: coachSystemPromptV2().trim() }, user],
+      temperature: 0.6,
+      responseFormat,
+    },
+    { attempts: 2 },
+  );
+
+  let finalRaw = content;
+
+  const parsed1 = parseJsonLenient(content);
+  if (!parsed1.ok) {
+    throw new Error(`LLM did not return valid JSON: ${content.slice(0, 300)}`);
+  }
+
+  let validated = validateRecommendationJson(parsed1.value, {
+    maxDurationMinutes,
+  });
+  if (!validated.ok) {
+    const repairSystem = `
+You fix JSON outputs to satisfy a schema and constraints.
+Return ONLY valid JSON (no markdown, no extra text).
+Keep the meaning as close as possible but fix invalid fields/rules.
+`;
+    const repairUser = {
+      role: "user",
+      content: JSON.stringify(
+        {
+          error: validated.error,
+          constraints: { maxDurationMinutes },
+          schemaHint: "Use the same schema as the coach output.",
+          previousOutput: content,
+        },
+        null,
+        2,
+      ),
+    };
+
+    const repaired = await callLLMWithRetry(
+      {
+        messages: [
+          { role: "system", content: repairSystem.trim() },
+          { role: "system", content: coachSystemPromptV2().trim() },
+          repairUser,
+        ],
+        temperature: 0.2,
+        responseFormat,
+      },
+      { attempts: 2 },
+    );
+
+    finalRaw = repaired.content;
+
+    const parsed2 = parseJsonLenient(repaired.content);
+    if (!parsed2.ok) {
+      throw new Error(
+        `LLM JSON failed validation (${validated.error}) and repair returned invalid JSON`,
+      );
+    }
+
+    validated = validateRecommendationJson(parsed2.value, { maxDurationMinutes });
+    if (!validated.ok) {
+      throw new Error(`LLM JSON failed validation: ${validated.error}`);
+    }
+  }
+
+  return {
+    ...validated.value,
+    meta: {
+      provider: "llm",
+      model: modelUsed,
+      inputs: {
+        promptVersion: String(process.env.PROMPT_VERSION || "v2"),
+        recentWorkoutsCount: trimmed.length,
+        loadSummary,
+        hasTrainingProfile: Boolean(trainingProfile),
+      },
+      raw: finalRaw,
+    },
+  };
+}
+
 function coachSystemPromptV2() {
   return `
 You are a high-quality running coach.
@@ -387,109 +613,26 @@ export async function generateRecommendationViaLLM({
   trainingProfile,
   todayISO,
 }) {
-  const today = startOfTodayUTC();
-  const dateISO = todayISO || today.toISOString().slice(0, 10);
-
-  const trimmed = trimWorkoutsForLLM(workouts);
   const loadSummary = summarizeTrainingLoad(workouts);
-
   const maxDurationMinutes =
     safeNumber(trainingProfile?.availability?.timePerDayMinutes) ?? null;
 
-  const user = {
-    role: "user",
-    content: JSON.stringify(
-      {
-        date: dateISO,
-        trainingProfile: trainingProfile || null,
-        loadSummary,
-        recentWorkouts: trimmed,
-        note: "Recommend a run for today. Make it specific: include targets and a fallback option.",
-      },
-      null,
-      2,
-    ),
-  };
-
-  const responseFormat =
-    String(process.env.LLM_RESPONSE_FORMAT || "").toLowerCase() === "json_object"
-      ? { type: "json_object" }
-      : undefined;
-
-  const { content, modelUsed } = await callLLM({
-    messages: [{ role: "system", content: coachSystemPromptV2().trim() }, user],
-    temperature: 0.6,
-    responseFormat,
-  });
-
-  let finalRaw = content;
-
-  const parsed1 = parseJsonLenient(content);
-  if (!parsed1.ok) {
-    throw new Error(`LLM did not return valid JSON: ${content.slice(0, 300)}`);
-  }
-
-  let validated = validateRecommendationJson(parsed1.value, {
-    maxDurationMinutes,
-  });
-  if (!validated.ok) {
-    // One retry: ask the model to fix the JSON to satisfy the schema/constraints.
-    const repairSystem = `
-You fix JSON outputs to satisfy a schema and constraints.
-Return ONLY valid JSON (no markdown, no extra text).
-Keep the meaning as close as possible but fix invalid fields/rules.
-`;
-    const repairUser = {
-      role: "user",
-      content: JSON.stringify(
-        {
-          error: validated.error,
-          constraints: { maxDurationMinutes },
-          schemaHint: "Use the same schema as the coach output.",
-          previousOutput: content,
-        },
-        null,
-        2
-      ),
-    };
-
-    const repaired = await callLLM({
-      messages: [
-        { role: "system", content: repairSystem.trim() },
-        { role: "system", content: coachSystemPromptV2().trim() },
-        repairUser,
-      ],
-      temperature: 0.2,
-      responseFormat,
+  try {
+    return await generateRecommendationViaLlmInner({
+      workouts,
+      trainingProfile,
+      todayISO,
     });
-
-    finalRaw = repaired.content;
-
-    const parsed2 = parseJsonLenient(repaired.content);
-    if (!parsed2.ok) {
-      throw new Error(
-        `LLM JSON failed validation (${validated.error}) and repair returned invalid JSON`
-      );
-    }
-
-    validated = validateRecommendationJson(parsed2.value, { maxDurationMinutes });
-    if (!validated.ok) {
-      throw new Error(`LLM JSON failed validation: ${validated.error}`);
-    }
+  } catch (err) {
+    console.error("generateRecommendationViaLLM failed, using fallback:", err);
+    return buildDeterministicFallback({
+      loadSummary,
+      maxDurationMinutes,
+      trainingProfile,
+      todayISO:
+        todayISO ||
+        startOfTodayUTC().toISOString().slice(0, 10),
+      reason: err,
+    });
   }
-
-  return {
-    ...validated.value,
-    meta: {
-      provider: "llm",
-      model: modelUsed,
-      inputs: {
-        promptVersion: String(process.env.PROMPT_VERSION || "v2"),
-        recentWorkoutsCount: trimmed.length,
-        loadSummary,
-        hasTrainingProfile: Boolean(trainingProfile),
-      },
-      raw: finalRaw,
-    },
-  };
 }

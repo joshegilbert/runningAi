@@ -24,6 +24,13 @@ const trainingProfileSchema = new mongoose.Schema(
       constraints: { type: String, default: "", maxlength: 500 },
     },
 
+    goalRace: {
+      name: { type: String, default: "", maxlength: 120 },
+      dateISO: { type: String, default: "" },
+      distanceLabel: { type: String, default: "", maxlength: 40 },
+      targetTimeMinutes: { type: Number, default: null, min: 10, max: 600 },
+    },
+
     zones: {
       // Store either pace ranges (min/mi) or HR ranges. Keep flexible.
       easy: {
