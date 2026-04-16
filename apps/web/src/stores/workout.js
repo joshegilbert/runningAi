@@ -35,14 +35,20 @@ export const useWorkoutStore = defineStore("workout", () => {
     }
   }
 
-  async function syncStrava() {
+  async function syncStrava(options = {}) {
     if (isSyncing.value) return;
+
+    const maxRuns = options.maxRuns;
+    const query =
+      maxRuns != null && Number.isFinite(Number(maxRuns))
+        ? `?maxRuns=${encodeURIComponent(String(maxRuns))}`
+        : "";
 
     isSyncing.value = true;
     clearError();
 
     try {
-      const data = await api.post("/strava/sync");
+      const data = await api.post(`/strava/sync${query}`);
 
       stravaStatus.value = {
         ...(stravaStatus.value || {}),

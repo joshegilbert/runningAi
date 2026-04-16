@@ -6,6 +6,7 @@ import RegisterPage from "../pages/RegisterPage.vue";
 import LogWorkoutPage from "../pages/LogWorkoutPage.vue";
 import StravaConnectedPage from "../pages/StravaConnectedPage.vue";
 import ProfilePage from "../pages/ProfilePage.vue";
+import DailyWorkoutPage from "../pages/DailyWorkoutPage.vue";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -57,6 +58,12 @@ const router = createRouter({
       path: "/profile",
       name: "profile",
       component: ProfilePage,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/daily-workout",
+      name: "daily-workout",
+      component: DailyWorkoutPage,
       meta: { requiresAuth: true },
     },
   ],

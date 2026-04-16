@@ -94,7 +94,7 @@ async function handleSyncAndRedirect() {
   startLoadingMessages();
 
   try {
-    await workoutStore.syncStrava();
+    await workoutStore.syncStrava({ maxRuns: 10 });
     router.push("/dashboard");
   } catch (err) {
     verificationError.value =

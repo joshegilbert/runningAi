@@ -17,6 +17,12 @@ const success = ref("");
 const profile = ref({
   experienceLevel: "beginner",
   timezone: "",
+  goalRace: {
+    name: "",
+    dateISO: "",
+    distanceLabel: "",
+    targetTimeMinutes: null,
+  },
   availability: {
     daysPerWeek: null,
     timePerDayMinutes: null,
@@ -60,6 +66,11 @@ function normalize() {
     p.zones[k].hrBpmLow = coerceNumberOrNull(p.zones[k].hrBpmLow);
     p.zones[k].hrBpmHigh = coerceNumberOrNull(p.zones[k].hrBpmHigh);
   }
+
+  p.goalRace = p.goalRace || {};
+  p.goalRace.targetTimeMinutes = coerceNumberOrNull(
+    p.goalRace.targetTimeMinutes
+  );
 }
 
 async function load() {
@@ -73,6 +84,10 @@ async function load() {
     profile.value = {
       ...profile.value,
       ...tp,
+      goalRace: {
+        ...profile.value.goalRace,
+        ...(tp.goalRace || {}),
+      },
       availability: { ...profile.value.availability, ...(tp.availability || {}) },
       zones: {
         ...profile.value.zones,
@@ -184,6 +199,63 @@ onMounted(load);
           </div>
         </div>
 
+        <div class="border-t border-slate-100 pt-6 space-y-4">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Race goal (optional)</h3>
+            <p class="text-xs text-slate-500 mt-1">
+              Used to align weekly volume and workout emphasis toward your event.
+            </p>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="sm:col-span-2">
+              <label class="block text-sm font-medium text-slate-700 mb-1">
+                Race name
+              </label>
+              <input
+                v-model="profile.goalRace.name"
+                placeholder="e.g. Chicago Half Marathon"
+                class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">
+                Race date
+              </label>
+              <input
+                v-model="profile.goalRace.dateISO"
+                type="date"
+                class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">
+                Distance
+              </label>
+              <input
+                v-model="profile.goalRace.distanceLabel"
+                placeholder="Half marathon, 10K, …"
+                class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">
+                Target finish time (minutes)
+              </label>
+              <input
+                v-model="profile.goalRace.targetTimeMinutes"
+                type="number"
+                min="10"
+                max="600"
+                placeholder="e.g. 120 for 2:00:00"
+                class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              />
+              <p class="text-[11px] text-slate-400 mt-1">
+                Total minutes (e.g. 95 for 1:35:00).
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div class="border-t border-slate-100 pt-6">
           <h3 class="text-sm font-bold text-slate-900">Availability</h3>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-3">
@@ -252,17 +324,19 @@ onMounted(load);
           <div>
             <h3 class="text-sm font-bold text-slate-900">Zones (Easy)</h3>
             <p class="text-xs text-slate-500 mt-1">
-              Enter pace in min/mi. Leave blank if unknown.
+              Pace in minutes per mile (decimal). Slower end = higher number
+              (e.g. 10.5); faster end = lower number (e.g. 9.0). Leave blank if
+              unknown.
             </p>
             <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 mt-3">
               <input
                 v-model="profile.zones.easy.paceMinPerMileLow"
-                placeholder="Pace low"
+                placeholder="Slower end (min/mi)"
                 class="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               />
               <input
                 v-model="profile.zones.easy.paceMinPerMileHigh"
-                placeholder="Pace high"
+                placeholder="Faster end (min/mi)"
                 class="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               />
               <input
@@ -280,15 +354,18 @@ onMounted(load);
 
           <div>
             <h3 class="text-sm font-bold text-slate-900">Zones (Tempo)</h3>
+            <p class="text-xs text-slate-500 mt-1">
+              Same pace convention: slower = higher min/mi, faster = lower min/mi.
+            </p>
             <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 mt-3">
               <input
                 v-model="profile.zones.tempo.paceMinPerMileLow"
-                placeholder="Pace low"
+                placeholder="Slower end (min/mi)"
                 class="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               />
               <input
                 v-model="profile.zones.tempo.paceMinPerMileHigh"
-                placeholder="Pace high"
+                placeholder="Faster end (min/mi)"
                 class="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               />
               <input

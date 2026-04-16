@@ -171,6 +171,16 @@ router.post("/sync", auth, async (req, res) => {
 
     const full = String(req.query.full || "").toLowerCase() === "true";
 
+    const maxRunsRaw = req.query.maxRuns;
+    const parsedMaxRuns = Number.parseInt(String(maxRunsRaw ?? ""), 10);
+    const maxRuns =
+      maxRunsRaw != null &&
+      String(maxRunsRaw) !== "" &&
+      Number.isFinite(parsedMaxRuns) &&
+      parsedMaxRuns > 0
+        ? Math.min(500, parsedMaxRuns)
+        : null;
+
     const after =
       !full && conn.lastSyncAt
         ? Math.floor(new Date(conn.lastSyncAt).getTime() / 1000)
@@ -183,6 +193,8 @@ router.post("/sync", auth, async (req, res) => {
     let updated = 0;
     let processed = 0;
     let rawUpserts = 0;
+    let runCount = 0;
+    let partial = false;
 
     while (true) {
       const url = new URL("https://www.strava.com/api/v3/athlete/activities");
@@ -239,8 +251,14 @@ router.post("/sync", auth, async (req, res) => {
         );
 
         processed++;
+        runCount++;
+        if (maxRuns != null && runCount >= maxRuns) {
+          partial = true;
+          break;
+        }
       }
 
+      if (partial) break;
       if (activities.length < perPage) break;
       page++;
     }
@@ -255,6 +273,8 @@ router.post("/sync", auth, async (req, res) => {
       processed,
       rawUpserts,
       lastSyncAt: conn.lastSyncAt,
+      partial,
+      maxRuns: maxRuns ?? null,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });

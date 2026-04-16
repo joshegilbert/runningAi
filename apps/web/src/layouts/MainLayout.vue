@@ -11,8 +11,21 @@ function handleLogout() {
   router.push("/login");
 }
 
-function isActive(path) {
-  return route.path.startsWith(path);
+function isDashboard() {
+  const p = route.path;
+  return p === "/dashboard" || p === "/";
+}
+
+function isHistory() {
+  return route.path.startsWith("/workouts");
+}
+
+function isDailyWorkout() {
+  return route.path.startsWith("/daily-workout");
+}
+
+function isProfile() {
+  return route.path.startsWith("/profile");
 }
 </script>
 
@@ -34,10 +47,10 @@ function isActive(path) {
         <!-- Nav Links -->
         <nav class="hidden sm:flex items-center gap-6">
           <button
-            @click="router.push('/')"
+            @click="router.push('/dashboard')"
             class="text-sm font-medium"
             :class="
-              isActive('/')
+              isDashboard()
                 ? 'text-indigo-600'
                 : 'text-slate-500 hover:text-slate-900'
             "
@@ -46,15 +59,39 @@ function isActive(path) {
           </button>
 
           <button
+            @click="router.push('/daily-workout')"
+            class="text-sm font-medium"
+            :class="
+              isDailyWorkout()
+                ? 'text-indigo-600'
+                : 'text-slate-500 hover:text-slate-900'
+            "
+          >
+            Daily workout
+          </button>
+
+          <button
             @click="router.push('/workouts')"
             class="text-sm font-medium"
             :class="
-              isActive('/workouts')
+              isHistory()
                 ? 'text-indigo-600'
                 : 'text-slate-500 hover:text-slate-900'
             "
           >
             History
+          </button>
+
+          <button
+            @click="router.push('/profile')"
+            class="text-sm font-medium"
+            :class="
+              isProfile()
+                ? 'text-indigo-600'
+                : 'text-slate-500 hover:text-slate-900'
+            "
+          >
+            Profile
           </button>
         </nav>
 
