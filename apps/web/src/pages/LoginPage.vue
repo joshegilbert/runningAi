@@ -27,14 +27,20 @@ async function handleLogin() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+  <div class="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+    <router-link
+      to="/"
+      class="self-start sm:self-center max-w-md w-full mb-4 text-sm text-indigo-600 font-medium hover:underline"
+    >
+      ← RunSync home
+    </router-link>
     <div
       class="max-w-md w-full bg-white rounded-xl shadow-lg p-8 border border-slate-100"
     >
       <div class="text-center mb-8">
         <h1 class="text-2xl font-bold text-slate-900">Welcome Back</h1>
         <p class="text-slate-500 mt-2 text-sm">
-          Sign in to access your training center
+          Sign in to RunSync to open your training center
         </p>
       </div>
 

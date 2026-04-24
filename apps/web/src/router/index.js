@@ -7,11 +7,16 @@ import LogWorkoutPage from "../pages/LogWorkoutPage.vue";
 import StravaConnectedPage from "../pages/StravaConnectedPage.vue";
 import ProfilePage from "../pages/ProfilePage.vue";
 import DailyWorkoutPage from "../pages/DailyWorkoutPage.vue";
+import HomePage from "../pages/HomePage.vue";
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: "/", redirect: "/dashboard" },
+    {
+      path: "/",
+      component: HomePage,
+      meta: { requiresGuest: true },
+    },
     {
       path: "/login",
       component: LoginPage,

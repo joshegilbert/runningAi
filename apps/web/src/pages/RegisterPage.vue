@@ -28,7 +28,13 @@ async function handleRegister() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+  <div class="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+    <router-link
+      to="/"
+      class="self-start sm:self-center max-w-md w-full mb-4 text-sm text-indigo-600 font-medium hover:underline"
+    >
+      ← RunSync home
+    </router-link>
     <div
       class="max-w-md w-full bg-white rounded-xl shadow-lg p-8 border border-slate-100"
     >
