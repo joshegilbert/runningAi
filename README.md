@@ -23,15 +23,35 @@ Full-stack running app: log runs, sync Strava, daily AI-backed workout recommend
 
 ## Deploy on Vercel (full stack)
 
-Use the **repository root** as the Vercel project root (not `apps/web`). `vercel.json` builds the Vue app into `apps/web/dist`, routes `/api/*` to a single Express serverless function (`api/index.mjs`), and rewrites other paths to `index.html` for the SPA.
+The repo is configured for **one Vercel project at the monorepo root**: `vercel.json` builds the Vue app to `apps/web/dist`, sends `/api` and `/api/*` to `api/index.mjs` (Express + Mongoose), and rewrites other paths to `index.html` for the SPA.
 
-1. Link or import the repo, set **Root Directory** to `.` (repo root).
-2. In the Vercel project **Environment variables**, add the same keys you use on the API (`MONGO_URI`, `JWT_SECRET`, `CLIENT_ORIGIN`, Strava, LLM, etc.). You can set **`CLIENT_ORIGIN`** to several comma-separated origins for CORS (e.g. production and a fixed preview URL). **Strava browser redirects** always use the **first** origin in that list, so put your primary public web URL first.
-3. Optional: `VITE_API_BASE_URL` — if unset, the web app uses `window.location.origin` so API calls stay on the same deployment.
-4. Set **`STRAVA_REDIRECT_URI`** to your deployed callback URL: `https://<project>.vercel.app/api/strava/callback` (see `GET /api/strava/callback` in `apps/api/src/routes/strava.routes.js`).
-5. Deploy: `npx vercel` from the repo root, or connect Git and push.
+### Checklist
 
-**Note:** If you previously linked `apps/web` as its own Vercel project, use a single root-linked project for this layout, or remove the nested `.vercel` under `apps/web` to avoid confusion.
+1. **MongoDB Atlas** (or any Mongo host): create a cluster and user, get **`MONGO_URI`**. In Atlas → Network Access, allow the IPs your host needs (Vercel serverless often uses `0.0.0.0/0` on free tiers with a strong password).
+2. **Vercel project**  
+   - [vercel.com/new](https://vercel.com/new): **Import** this GitHub repo.  
+   - **Root Directory:** leave as **`.`** (repository root), not `apps/web`.  
+   - Framework: none / other is fine; build is driven by `vercel.json`.  
+   - If you had an older project only for `apps/web`, either delete it or ignore it; this layout expects **one** project linked at the repo root (`npx vercel link` from the repo root). Remove `apps/web/.vercel` if it causes the CLI to use the wrong root.
+3. **Environment variables** (Vercel → Project → Settings → Environment Variables). Add for **Production** (and **Preview** if you use previews):
+
+   | Variable | Notes |
+   |----------|--------|
+   | `MONGO_URI` | Required |
+   | `JWT_SECRET` | Long random string |
+   | `CLIENT_ORIGIN` | Your live site origin(s), e.g. `https://your-project.vercel.app` — no trailing slash. Comma-separated = multiple CORS origins; **Strava post-OAuth redirects use the first value only**, so put the URL users actually open in the browser first. |
+   | `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` | From Strava API settings |
+   | `STRAVA_REDIRECT_URI` | Must match Strava app exactly: `https://<your-deployment>.vercel.app/api/strava/callback` |
+   | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | Optional; for AI recommendations |
+   | `VITE_API_BASE_URL` | **Optional** on Vercel — omit to use same origin (`window.location.origin`). |
+
+4. **Strava application** ([developers.strava.com](https://www.strava.com/settings/api)): set **Authorization Callback Domain** / redirect URI to match **`STRAVA_REDIRECT_URI`** (same scheme, host, and path as production).
+5. **Deploy**  
+   - **Git:** push to `main`; Vercel builds automatically if the repo is connected.  
+   - **CLI:** from repo root, `npx vercel` (preview) or `npx vercel --prod` after `vercel login` / `vercel link`.
+6. **Smoke test:** open the production URL, register or log in, hit **GET** `https://<host>/api/health` (should return `{ "ok": true }`). Exercise Strava connect on production once redirects are correct.
+
+**Limits:** The API function uses `maxDuration` in `vercel.json`; long LLM calls on Hobby may time out — shorten work or raise limits on a paid plan if needed.
 
 ## Quick start
 
