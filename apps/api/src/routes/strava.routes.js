@@ -1,5 +1,6 @@
 import { Router } from "express";
 import crypto from "crypto";
+import { primaryClientOrigin } from "../config/clientOrigin.js";
 import auth from "../middleware/auth.js";
 import StravaConnection from "../models/StravaConnection.js";
 import StravaOAuthState from "../models/StravaOAuthState.js";
@@ -9,7 +10,7 @@ import RawStravaActivity from "../models/RawStravaActivity.js";
 const router = Router();
 
 function redirectToClient(res, { status, reason }) {
-  const origin = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+  const origin = primaryClientOrigin();
 
   const url = new URL("/strava/connected", origin);
   url.searchParams.set("status", status);
@@ -397,8 +398,7 @@ router.get("/callback", async (req, res) => {
     );
 
     res.redirect(
-      (process.env.CLIENT_ORIGIN || "http://localhost:5173") +
-        "/strava/connected?status=success",
+      primaryClientOrigin() + "/strava/connected?status=success",
     );
   } catch (err) {
     return redirectToClient(res, { status: "error", reason: "server_error" });

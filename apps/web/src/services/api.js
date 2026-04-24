@@ -1,4 +1,12 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+function resolveBaseUrl() {
+  const fromEnv = import.meta.env.VITE_API_BASE_URL;
+  if (fromEnv) return fromEnv.replace(/\/+$/, "");
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+  return "";
+}
+
 const API_PREFIX = "/api";
 
 
@@ -19,11 +27,12 @@ async function buildError(res) {
 }
 
 function makeUrl(path) {
-  if (!BASE_URL) {
-    throw new Error("Missing VITE_API_BASE_URL in your frontend .env file");
+  const cleanBase = resolveBaseUrl();
+  if (!cleanBase) {
+    throw new Error(
+      "Missing VITE_API_BASE_URL (or browser origin) for API requests",
+    );
   }
-
-  const cleanBase = BASE_URL.replace(/\/+$/, "");
 
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
 

@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 
+import { corsOrigins } from "./config/clientOrigin.js";
 import errorHandler from "./middleware/error.js";
 import authRoutes from "./routes/auth.routes.js";
 import meRoutes from "./routes/me.routes.js";
@@ -10,7 +11,7 @@ import recommendationsRoutes from "./routes/recommendations.js";
 
 const app = express();
 
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || "http://localhost:5173" }));
+app.use(cors({ origin: corsOrigins() }));
 app.use(express.json());
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
