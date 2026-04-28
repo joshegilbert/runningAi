@@ -1,3 +1,4 @@
+<img width="1503" height="740" alt="Screenshot 2026-04-27 at 6 16 50 PM" src="https://github.com/user-attachments/assets/95ea0800-908b-4ee4-a7a2-a18e09dde733" />
 # RunSync
 
 Full-stack running app: log runs, sync Strava, daily AI-backed workout recommendations, and a training profile (availability, zones, race goal).
